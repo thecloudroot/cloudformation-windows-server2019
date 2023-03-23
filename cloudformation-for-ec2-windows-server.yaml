@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Ec2 Windows Server 2019
+Parameters:
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Please enter the VpcId.
+  ClientID:
+    Type: String
+    Description: Please enter Customer nam eexample = bank123
+  SubnetIdForWebserver:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: Please enter the subnetId for the Webserver.
+  InstanceType:
+    Type: String
+    Description: Please enter the instance type example t3a.medium,t3a.large,t3a.xlarge,t3a.2xlarge
+    Default: t3a.xlarge
+  AmiID:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Description: Query for the AMI IDs using AWS Systems Manager Parameter Store
+    Default: '/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base'
+  KeyPairName:
+    Description: Name of an existing public/private key pair. If you do not have one in this AWS Region,
+      please create it before continuing.
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  Env:
+    Description: Type of Env. Default value, devIT - for development, production for live infrastructure. 
+    Type: String                                                                                                  
+    Default: stage                                                                                               
+    AllowedValues:                                                                                                
+      - production
+      - stage
+      - sandbox
+Resources:
+  WindowsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ClientID}-ProwlerServer-SG'
+      VpcId: !Ref VpcId
+      GroupDescription: "Allow SSH/HTTPS traffic"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 0.0.0.0/0
+      GroupName: !Sub '${ClientID}-WindowsScannerInstance-SG'
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub '${ClientID}-WindowsSecurityGroup'
+        - Key: ClientID
+          Value: !Sub '${ClientID}'
+  Ec2SsmIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess            
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Policies:
+        - PolicyName: !Sub ${ClientID}-sts-assume-role
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "sts:*"
+                Resource: "*"        
+      Tags:
+        - Key: Name
+          Value: !Sub '${ClientID}-Ec2SsmIamRole-Windows'
+        - Key: ClientID
+          Value: !Sub '${ClientID}'
+  Ec2SsmInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Path: /
+      Roles: [!Ref Ec2SsmIamRole]         
+  WindowsServerInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiID
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: '500'
+            DeleteOnTermination: 'true'
+            Encrypted: 'true'
+      SecurityGroupIds:
+        - !Ref WindowsSecurityGroup
+      SubnetId: !Ref SubnetIdForWebserver
+      IamInstanceProfile: !Ref Ec2SsmInstanceProfile                       
+      Tags:
+        - Key: Name
+          Value: !Sub '${ClientID}-EC2-Windows-1'
+        - Key: ClientID
+          Value: !Sub '${ClientID}'
+  WindowsServerInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiID
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: '500'
+            DeleteOnTermination: 'true'
+            Encrypted: 'true'
+      SecurityGroupIds:
+        - !Ref WindowsSecurityGroup
+      SubnetId: !Ref SubnetIdForWebserver
+      IamInstanceProfile: !Ref Ec2SsmInstanceProfile                       
+      Tags:
+        - Key: Name
+          Value: !Sub '${ClientID}-EC2-Windows-2'
+        - Key: ClientID
+          Value: !Sub '${ClientID}'
+
